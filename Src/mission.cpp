@@ -31,14 +31,13 @@ bool Mission::createLog() {
 
 void Mission::createEnvironmentOptions() {
     options.searchtype = config.SearchParams[CN_SP_ST];
-    options.allowdiagonal = config.SearchParams[CN_SP_AD];
-    options.cutcorners = config.SearchParams[CN_SP_CC];
-    options.allowsqueeze = config.SearchParams[CN_SP_AS];
-    if (config.N > 4) {
+    if (config.N > 1) {
+        options.k = config.SearchParams[CN_SP_KI];
         options.metrictype = config.SearchParams[CN_SP_MT];
         options.heuristicweight = config.SearchParams[CN_SP_HW];
         options.breakingties = config.SearchParams[CN_SP_BT];
     } else {
+        options.k = 2;
         options.metrictype = CN_SP_MT_EUCL;
         options.heuristicweight = 1;
         options.breakingties = true;

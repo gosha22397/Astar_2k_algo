@@ -20,6 +20,23 @@ int max_int(int i, int j) {
     return j;
 }
 
+std::list<std::pair<int, int>> get_moves(int k) {
+    std::list<std::pair<int, int>> answer = {{0, 1}, {1, 0}, {0, -1}, {-1, 0}, {0, 1}};
+    int size = 2;
+    while (size != k) {
+        auto it = answer.begin();
+        size_t k = answer.size() - 1;
+        for (size_t i = 0; i < k; ++i) {
+            std::pair<int, int> a = *it;
+            std::pair<int, int> b = *(++it);
+            answer.insert(it, {a.first + b.first, a.second + b.second});
+        }
+        ++size;
+    }
+    answer.pop_back();
+    return answer;
+}
+
 double get_f_value(const Node& input, const EnvironmentOptions& options) {
     return input.get_g() + options.heuristicweight * input.get_h();
 }
@@ -56,48 +73,72 @@ double return_H (const std::pair<int, int>& start,
     return 0;
 }
 
-bool allow_move_to_i_j(int s_i, int s_j, int i, int j,
-                       const Map& map, const EnvironmentOptions& options) {
+bool allow_move_to_i_j(int s_i, int s_j, int i, int j, const Map& map) {
+    if (map.getValue(s_i, s_j) != 0) {
+        return false;
+    }
     if (map.getValue(s_i + i, s_j + j) != 0) {
         return false;
     }
-    if (i == 0 && j == 0) {
-        return false;
-    }
-    if (abs(i) + abs(j) == 2) {
-        if (options.allowdiagonal == true) {
-            int count_near = 0;
-            if (map.getValue(s_i, s_j + j) == 1) {
-                count_near += 1;
-            }
-            if (map.getValue(s_i + i, s_j) == 1) {
-                count_near += 1;
-            }
-            if (count_near == 0) {
-                return true;
-            }
-            if (count_near == 1) {
-                if (options.cutcorners == true) {
-                    return true;
+    if (i == 0 || j == 0) {
+        return true;
+    } else {
+        double now_x = s_i;
+        double now_y = s_j;
+        double k = j / i;
+        double b = (s_j + j + 0.5) - ((s_i + i + 0.5) * (j / i));
+        while (now_x != (s_i + i) && now_y != (s_j + j)) {
+            if (i > 0 && j > 0) {
+                if ((k * (now_x + 1) + b - now_y) * (k * now_x + b - (now_y + 1)) < 0) {
+                    if (map.getValue(now_x, now_y) != 0) {
+                        return false;
+                    }
+                    now_x += 1;
                 } else {
-                    return false;
+                    now_x -= 1;
+                    now_y += 1;
                 }
             }
-            if (count_near == 2) {
-                if (options.allowsqueeze == true) {
-                    return true;
+            if (i > 0 && j < 0) {
+                if ((k * now_x + b - now_y) * (k * (now_x + 1) + b - (now_y + 1)) < 0) {
+                    if (map.getValue(now_x, now_y) != 0) {
+                        return false;
+                    }
+                    now_x += 1;
                 } else {
-                    return false;
+                    now_x -= 1;
+                    now_y -= 1;
                 }
             }
-        } else {
-            return false;
+            if (i < 0 && j < 0) {
+                if ((k * (now_x + 1) + b - now_y) * (k * now_x + b - (now_y + 1)) < 0) {
+                    if (map.getValue(now_x, now_y) != 0) {
+                        return false;
+                    }
+                    now_x -= 1;
+                } else {
+                    now_x += 1;
+                    now_y -= 1;
+                }
+            }
+            if (i < 0 && j > 0) {
+                if ((k * now_x + b - now_y) * (k * (now_x + 1) + b - (now_y + 1)) < 0) {
+                    if (map.getValue(now_x, now_y) != 0) {
+                        return false;
+                    }
+                    now_x -= 1;
+                } else {
+                    now_x += 1;
+                    now_y += 1;
+                }
+            }
         }
     }
     return true;
 }
 
 SearchResult Search::startSearch(const Map& map, const EnvironmentOptions& options, int loglevel) {
+    std::list<std::pair<int, int>> list_move = get_moves(options.k);
     std::chrono::time_point<std::chrono::system_clock> start_time = std::chrono::system_clock::now();
     std::vector<Node> Node_info((size_t(map.getMapWidth() * map.getMapHeight())));
     auto cmp = [&](size_t first, size_t second) {
@@ -204,29 +245,25 @@ SearchResult Search::startSearch(const Map& map, const EnvironmentOptions& optio
         } else {
             int min_node_i = int(min_node_ij.first);
             int min_node_j = int(min_node_ij.second);
-            for (int i = -1; i <= 1; ++i) {
-                for (int j = -1; j <= 1; ++j) {
-                    if (allow_move_to_i_j(min_node_i, min_node_j, i, j, map, options) == true) {
-                        Node new_top;
-                        new_top.cord = std::pair<size_t, size_t> (min_node_i + i, min_node_j + j);
-                        if (abs(i) + abs(j) == 2) {
-                            new_top.g = Node_info[min_node_number].g + CN_SQRT_TWO;
+            for (auto now_move : list_move) {
+                int i = now_move.first;
+                int j = now_move.second;
+                if (allow_move_to_i_j(min_node_i, min_node_j, i, j, map) == true) {
+                    Node new_top;
+                    new_top.cord = std::pair<size_t, size_t> (min_node_i + i, min_node_j + j);
+                    new_top.g = Node_info[min_node_number].g + sqrt(i * i + j * j);
+                    new_top.h = return_H(new_top.cord, map.getMapFinish(), options);
+                    new_top.parent_node = min_node_number;
+                    size_t new_top_cord = get_number(new_top.cord, map.getMapWidth());
+                    if (closed_nodes.count(new_top_cord) == 0) {
+                        if (open_nodes.count(new_top_cord) == 0) {
+                            Node_info[new_top_cord] = new_top;
+                            open_nodes.insert(new_top_cord);
                         } else {
-                            new_top.g = Node_info[min_node_number].g + 1;
-                        }
-                        new_top.h = return_H(new_top.cord, map.getMapFinish(), options);
-                        new_top.parent_node = min_node_number;
-                        size_t new_top_cord = get_number(new_top.cord, map.getMapWidth());
-                        if (closed_nodes.count(new_top_cord) == 0) {
-                            if (open_nodes.count(new_top_cord) == 0) {
+                            if (new_top.g <= Node_info[new_top_cord].g) {
+                                open_nodes.erase(new_top_cord);
                                 Node_info[new_top_cord] = new_top;
                                 open_nodes.insert(new_top_cord);
-                            } else {
-                                if (new_top.g <= Node_info[new_top_cord].g) {
-                                    open_nodes.erase(new_top_cord);
-                                    Node_info[new_top_cord] = new_top;
-                                    open_nodes.insert(new_top_cord);
-                                }
                             }
                         }
                     }
